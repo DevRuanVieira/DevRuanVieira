@@ -1,0 +1,49 @@
+# Atualiza o card do README todo dia com os números do GitHub
+# (inclui contribuições em repositórios privados do trabalho).
+#
+# Precisa do secret PROFILE_TOKEN: um token *classic* com escopos `repo` e `read:user`.
+# Se a org do trabalho usa SSO, autorize o token nela (Configure SSO → Authorize).
+name: Atualizar perfil
+
+on:
+  schedule:
+    - cron: "17 9 * * *"   # 06:17 em São Paulo
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["scripts/**", ".github/workflows/update-profile.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualizar-perfil
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerar card
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::Secret PROFILE_TOKEN não configurado: o card continua como está."
+            exit 0
+          fi
+          python scripts/generate.py
+        env:
+          GH_TOKEN: ${{ secrets.PROFILE_TOKEN }}
+          GH_LOGIN: ${{ github.repository_owner }}
+
+      - name: Commitar se mudou
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets
+          git diff --staged --quiet || (git commit -m "chore: atualiza card do perfil" && git push)
